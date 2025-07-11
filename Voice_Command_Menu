@@ -1,0 +1,169 @@
+from flask import Flask, request, render_template_string, jsonify
+import threading
+import os
+import subprocess
+import webbrowser
+import platform
+import pyjokes
+from datetime import datetime
+import functools
+
+app = Flask(__name__)
+
+# ✅ Logging decorator
+def log_command(func):
+    @functools.wraps(func)
+    def wrapper(command):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open("voice_log.txt", "a") as log_file:
+            log_file.write(f"[{timestamp}] Command: {command}\n")
+        return func(command)
+    return wrapper
+
+# ✅ Timing decorator
+def timed(func):
+    @functools.wraps(func)
+    def wrapper(command):
+        start = datetime.now()
+        result = func(command)
+        end = datetime.now()
+        duration = (end - start).total_seconds()
+        with open("timing_log.txt", "a") as tlog:
+            tlog.write(f"[{start.strftime('%Y-%m-%d %H:%M:%S')}] Command: {command} | Duration: {duration:.3f}s\n")
+        return result
+    return wrapper
+
+# ✅ Command processor with both decorators
+@timed
+@log_command
+def process_command(command):
+    command = command.lower()
+    try:
+        if "1" in command or "one" in command:
+            os.makedirs("TestFolder", exist_ok=True)
+            return "📁 Folder 'TestFolder' created."
+        elif "2" in command or "two" in command:
+            with open("sample.txt", "w") as f:
+                f.write("Hello from Flask voice app!")
+            return "📝 File 'sample.txt' created."
+        elif "3" in command or "three" in command:
+            if os.path.exists("sample.txt"):
+                os.rename("sample.txt", "renamed_sample.txt")
+                return "🔁 File renamed to 'renamed_sample.txt'."
+            return "❌ File 'sample.txt' not found."
+        elif "4" in command or "four" in command:
+            if os.path.exists("TestFolder"):
+                os.rmdir("TestFolder")
+                return "🗑 Folder 'TestFolder' deleted."
+            return "❌ Folder 'TestFolder' not found."
+        elif "5" in command or "five" in command:
+            if platform.system() == "Windows":
+                os.system("start notepad")
+                return "📝 Notepad opened."
+            return "❌ Notepad only supported on Windows."
+        elif "6" in command or "six" in command:
+            return f"🕒 Date: {subprocess.getoutput('date')}"
+        elif "7" in command or "seven" in command:
+            if platform.system() == "Windows":
+                os.system("start calc")
+                return "🧮 Calculator opened."
+            return "❌ Calculator only supported on Windows."
+        elif "8" in command or "eight" in command:
+            webbrowser.open("https://www.google.com")
+            return "🌐 Google opened."
+        elif "9" in command or "nine" in command:
+            webbrowser.open("https://www.youtube.com")
+            return "📺 YouTube opened."
+        elif "10" in command or "ten" in command:
+            webbrowser.open("https://web.whatsapp.com")
+            return "💬 WhatsApp Web opened."
+        elif "joke" in command:
+            return f"😂 {pyjokes.get_joke()}"
+        elif "list" in command or "show files" in command or "display files" in command:
+            files = os.listdir()
+            return "📄 Files & Folders:\n" + "\n".join(files)
+        else:
+            return "❌ Unknown command. Speak a number 1–10 or say 'joke' or 'list files'."
+    except Exception as e:
+        return f"⚠ Error: {str(e)}"
+
+@app.route("/")
+def index():
+    return render_template_string(PAGE_HTML)
+
+@app.route("/voice-command", methods=["POST"])
+def voice_command():
+    data = request.get_json()
+    command = data.get("command", "")
+    response = process_command(command)
+    return jsonify({"response": response})
+
+PAGE_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🎙 Voice Command Menu</title>
+</head>
+<body style="text-align:center; font-family:sans-serif; margin-top:50px;">
+    <h1>🎤 Speak a Command</h1>
+    <button onclick="startRecognition()" style="padding:15px 25px; font-size:18px;">🎙 Speak Now</button>
+    <p id="status">Waiting for input...</p>
+    <pre id="result" style="background:#f0f0f0; padding:10px; width:60%; margin:auto; border:1px solid #ccc;"></pre>
+
+    <script>
+        function startRecognition() {
+            const status = document.getElementById("status");
+            const result = document.getElementById("result");
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert("Speech Recognition not supported in this browser.");
+                return;
+            }
+
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            status.innerText = "🎙 Listening...";
+
+            recognition.start();
+
+            recognition.onresult = function(event) {
+                const command = event.results[0][0].transcript;
+                status.innerText = "✅ You said: " + command;
+
+                fetch("/voice-command", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ command: command })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    result.innerText = data.response;
+
+                    // 🔊 Voice reply
+                    const utterance = new SpeechSynthesisUtterance(data.response);
+                    speechSynthesis.speak(utterance);
+                });
+            };
+
+            recognition.onerror = function(event) {
+                status.innerText = "❌ Error: " + event.error;
+            };
+        }
+    </script>
+</body>
+</html>
+"""
+
+# 🔄 Run Flask app in background thread (for Jupyter/Notebook)
+def run_flask():
+    app.run(port=5000, debug=False, use_reloader=False)
+
+# 🧵 Start server if not running already
+if not hasattr(app, 'started'):
+    threading.Thread(target=run_flask).start()
+    app.started = True
+    print("✅ Flask app is running at http://127.0.0.1:5000")
