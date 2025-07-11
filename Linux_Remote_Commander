@@ -1,0 +1,98 @@
+import streamlit as st
+import paramiko
+
+# Linux Commands Dictionary
+linux_commands = {
+    1:  ("ls -la", "List files in current directory with details"),
+    2:  ("pwd", "Print the current working directory"),
+    3:  ("whoami", "Show current logged-in user"),
+    4:  ("df -h", "Show disk space usage"),
+    5:  ("top -n 1 -b", "System processes"),
+    6:  ("free -m", "Memory usage"),
+    7:  ("uptime", "System uptime"),
+    8:  ("uname -a", "System information"),
+    9:  ("cat /etc/os-release", "OS version info"),
+    10: ("ps aux", "List all processes"),
+    11: ("id", "Show user ID and group ID"),
+    12: ("groups", "Show groups current user belongs to"),
+    13: ("who", "Show who is logged in"),
+    14: ("hostname", "Display system hostname"),
+    15: ("lsblk", "List block devices (disks and partitions)"),
+    16: ("mount", "Show mounted file systems"),
+    17: ("df", "Disk free space (in blocks)"),
+    18: ("du -sh *", "Show folder sizes in current directory"),
+    19: ("history", "Show command history"),
+    20: ("echo $SHELL", "Show current shell"),
+    21: ("env", "List environment variables"),
+    22: ("which python3", "Show path of Python 3"),
+    23: ("date", "Show current date and time"),
+    24: ("cal", "Display calendar"),
+    25: ("ip a", "Show network interfaces and IPs"),
+    26: ("ping -c 3 google.com", "Check internet connectivity"),
+    27: ("ifconfig", "Show IP configuration (older systems)"),
+    28: ("netstat -tulpn", "Show open ports and services"),
+    29: ("ss -tuln", "Modern netstat alternative"),
+    30: ("curl ifconfig.me", "Show public IP address"),
+    31: ("man ls", "Show manual/help for 'ls' command"),
+    32: ("alias", "List command aliases"),
+    33: ("ls /", "List contents of root directory"),
+    34: ("ls ~", "List contents of home directory"),
+    35: ("ls /var/log", "List system log files"),
+    36: ("journalctl -xe", "Show systemd logs (error mode)"),
+    37: ("uptime -p", "Pretty format uptime"),
+    38: ("who -b", "Last system boot time"),
+    39: ("last", "Show last login sessions"),
+    40: ("dmesg | tail", "Show last kernel boot messages"),
+    41: ("crontab -l", "Show scheduled cron jobs"),
+    42: ("find . -name '*.py'", "Find all Python files"),
+    43: ("grep 'root' /etc/passwd", "Search for 'root' in passwd file"),
+    44: ("touch test.txt", "Create a blank text file"),
+    45: ("mkdir new_folder", "Create a new directory"),
+    46: ("rm -f test.txt", "Delete test.txt file"),
+    47: ("rmdir new_folder", "Remove an empty folder"),
+    48: ("chmod +x *.sh", "Make all .sh files executable"),
+    49: ("ls -R", "Recursively list all files"),
+    50: ("tree", "Display directory tree (if installed)"),
+}
+
+# Streamlit UI
+st.set_page_config(page_title="Linux Remote Commander", layout="centered")
+st.title("🐧 Remote Linux Command Executor")
+
+with st.form("linux_form"):
+    st.subheader("🔐 SSH Credentials")
+    username = st.text_input("👤 Username")
+    ip = st.text_input("🌐 Server IP Address")
+    password = st.text_input("🔑 Password", type="password")
+
+    st.subheader("💻 Select Linux Command")
+    command_number = st.selectbox("📋 Command Number", list(linux_commands.keys()), format_func=lambda x: f"{x}. {linux_commands[x][0]} → {linux_commands[x][1]}")
+    
+    submitted = st.form_submit_button("🚀 Run Command")
+
+# SSH Execution
+if submitted:
+    try:
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(ip, username=username, password=password)
+        
+        command, description = linux_commands[command_number]
+        st.info(f"Running: `{command}` → {description}")
+
+        stdin, stdout, stderr = ssh.exec_command(command)
+        output = stdout.read().decode()
+        error = stderr.read().decode()
+
+        if output:
+            st.success("✅ Output:")
+            st.code(output)
+        if error:
+            st.error("❌ Error:")
+            st.code(error)
+
+        ssh.close()
+    except paramiko.AuthenticationException:
+        st.error("❌ Authentication Failed. Check your credentials.")
+    except Exception as e:
+        st.error(f"⚠️ Error: {e}")
